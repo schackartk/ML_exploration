@@ -1,25 +1,32 @@
-library(shiny)
-library(tidyverse)
-library(ggfortify)
-library(MASS)
+# Author:  Kenneth Schackart
+# Date:    13 September 2020
+# Email:   schackartk1@gmail.com
+
 library(caret)
 library(e1071)
+library(ggfortify)
+library(MASS)
+library(shiny)
+library(tidyverse)
 
 preproc <- function(df) {
-    preproc.param <- df %>% preProcess(method = c("center", "scale"))
-    df.trans <- preproc.param %>% predict(df)
+    #' Center and scale data prior to dimension reduction
+    #' 
+    #' @description
+    #' Returns transformed dataframe same size as df
     
-    return(df.trans)
+    # Center: subtract mean of predictor's data, scale: divide by std. dev.
+    preproc_params <- df %>% preProcess(method = c("center", "scale"))
+    df_trans <- preproc_params %>% predict(df)
     
+    return(df_trans)
 }
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
-
-    # Application title
+    
     titlePanel("Comparing Dimension Reduction Algorithms"),
-
-    # Sidebar with a slider input for number of bins 
+    
     sidebarLayout(
         sidebarPanel(
             sliderInput("pts_per_group",
@@ -29,18 +36,18 @@ ui <- fluidPage(
                         value = 100),
             
             sliderInput("z_sd",
-                       "Z Standard Deviation:",
-                       min = 0,
-                       max = 0.5,
-                       value = 0.03),
+                        "Z Standard Deviation:",
+                        min = 0,
+                        max = 0.5,
+                        value = 0.03),
             
             sliderInput("x_dist",
                         "Distance Between Means in X:",
                         min = 0,
                         max = 1,
                         value = 0.2),
-           
-             sliderInput("x_sd",
+            
+            sliderInput("x_sd",
                         "X Standard deviation:",
                         min = 0,
                         max = 1,
@@ -58,15 +65,13 @@ ui <- fluidPage(
                         max = 1,
                         value = 0.075),
             
-
         ),
-
-        # Show a plot of the generated distribution
+        
         mainPanel(
-           plotOutput("raw_plot"),
-           plotOutput("PCA_plot"),
-           plotOutput("LDA_plot"),
-           plotOutput("SVM_plot")
+            plotOutput("raw_plot"),
+            plotOutput("PCA_plot"),
+            plotOutput("LDA_plot"),
+            plotOutput("SVM_plot")
         )
     )
 )
@@ -78,16 +83,20 @@ server <- function(input, output) {
     pal <- "Dark2"
     
     get_labs <- reactive({
+        #' Generate label lists based on number of points chosen
+        
         n_per_grp <- input$pts_per_group
         
         labels <- c(rep(x = "Aang", times = n_per_grp),
-                 rep(x = "Toph", times = n_per_grp),
-                 rep(x = "Zuko", times = n_per_grp))
+                    rep(x = "Toph", times = n_per_grp),
+                    rep(x = "Zuko", times = n_per_grp))
         
         labels
     })
     
     make_df <- reactive({
+        #' Generate dataframe based on selected parameters
+        
         n_per_grp <- input$pts_per_group
         df <- tibble(.rows = 3*n_per_grp)
         
@@ -111,8 +120,9 @@ server <- function(input, output) {
         
         df
     })
-
+    
     output$raw_plot <- renderPlot({
+        #' Make a plot of the raw data
         
         df <- make_df()
         
@@ -128,15 +138,16 @@ server <- function(input, output) {
     })
     
     output$PCA_plot <- renderPlot({
-    
+        #' Perform PCA and plot the results
+        
         df <- make_df()
         lab <- get_labs()
         
-        df.trans <- preproc(df)
+        df_trans <- preproc(df)
         
-        df.pca <- prcomp(df.trans[,2:4])
+        df_pca <- prcomp(df_trans[,2:4])
         
-        ggplot(df.pca, mapping = aes(PC1, PC2, color = lab)) +
+        ggplot(df_pca, mapping = aes(PC1, PC2, color = lab)) +
             geom_point(aes(color = lab, shape = lab), size = 4, alpha = 0.6) +
             scale_color_brewer(palette =  pal) +
             scale_fill_brewer(palette = pal) +
@@ -146,18 +157,16 @@ server <- function(input, output) {
     })
     
     output$LDA_plot <- renderPlot({
+        #' Perform LDA and plot the results
         
         df <- make_df()
         
-        df.trans <- preproc(df)
+        df_trans <- preproc(df)
         
-        df.lda <- lda(lab ~ .,data = df.trans)
-        lda.data <- cbind(df, predict(df.lda)$x)
+        df_lda <- lda(lab ~ .,data = df_trans)
+        lda_data <- cbind(df, predict(df_lda)$x)
         
-        n_per_grp <- input$pts_per_group
-    
-        
-        ggplot(lda.data, aes(LD1, LD2)) +
+        ggplot(lda_data, aes(LD1, LD2)) +
             geom_point(aes(color = lab, shape = lab), size = 4, alpha = 0.6) +
             scale_color_brewer(palette =  pal) +
             scale_fill_brewer(palette = pal) +
@@ -167,39 +176,44 @@ server <- function(input, output) {
     })
     
     output$SVM_plot <- renderPlot({
+        #' Run LDA and generate a SVM classifier, plot it
         
         df <- make_df()
         
-        df.trans <- preproc(df)
+        df_trans <- preproc(df)
         
-        df.lda <- lda(lab ~ .,data = df.trans)
-        lda.data <- cbind(df, predict(df.lda)$x)
+        df_lda <- lda(lab ~ .,data = df_trans)
+        lda_data <- cbind(df, predict(df_lda)$x)
         
-        svm.data <- lda.data %>% dplyr::select(lab, LD1, LD2)
-        svm.data$lab <- factor(svm.data$lab)
+        svm_data <- lda_data %>% dplyr::select(lab, LD1, LD2)
+        svm_data$lab <- factor(svm_data$lab)
         
-        svm_fit <-  svm.data %>% svm(factor(lab) ~ ., data = ., kernel = "radial", cost = 10, scale = FALSE)
+        svm_fit <-  svm_data %>% svm(factor(lab) ~ ., data = .,
+                                     kernel = "radial", cost = 10,
+                                     scale = FALSE)
         
+        # A grid the same size as the data, that will be turned into the SVM regions
         grid <- expand.grid(
-            seq(min(svm.data$LD1), max(svm.data$LD1),length.out=200),  
-            seq(min(svm.data$LD2), max(svm.data$LD2),length.out=200))
-        
+            seq(min(svm_data$LD1), max(svm_data$LD1),length.out=200),  
+            seq(min(svm_data$LD2), max(svm_data$LD2),length.out=200))
         names(grid) <- names(svm.data)[2:3]
-        preds <- predict(svm_fit, grid)
         
-        df <- data.frame(grid, preds)
-        ggplot(df, mapping = aes(x = LD1, y = LD2)) + 
-            geom_tile(alpha = 0.25, aes(fill = preds)) +
-            geom_point(data = svm.data, size = 4, alpha = 0.6,
+        # Use SVM model to assign predicted class to grid points
+        preds <- predict(svm_fit, grid)
+        svm_regions <- data.frame(grid, preds)
+        
+        ggplot(svm_data, mapping = aes(x = LD1, y = LD2)) + 
+            geom_tile(data = svm_regions, alpha = 0.25, aes(fill = preds)) +
+            geom_point(size = 4, alpha = 0.6,
                        mapping = aes(color = lab, shape = lab)) +
             scale_color_brewer(palette =  pal) +
             scale_fill_brewer(palette = pal) +
             labs(title = "Support Vector Machine on LDA",
                  subtitle = "Radial Kernel",
-                 fill = "SVM Prediction",
+                 fill = "SVM\nPrediction",
                  color = "Bender",
                  shape = "Bender")
-            
+        
     })
     
 }
