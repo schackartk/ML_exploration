@@ -3,6 +3,8 @@
 # Email:   schackartk1@gmail.com
 
 library(caret)
+library(extrafont)
+loadfonts(device="win", quiet=TRUE)
 library(e1071)
 library(ggfortify)
 library(MASS)
@@ -81,26 +83,16 @@ ui <- fluidPage(
                  )
         ),
         tabPanel("Dimension Reduction", fluid = TRUE,
-                 sidebarLayout(
-                     sidebarPanel(
-                         
-                     ),
-                     
-                     mainPanel(
-                         plotOutput("PCA_plot"),
-                         plotOutput("LDA_plot")
-                     )
+                 fluidRow(
+                    column(6,
+                           plotOutput("PCA_plot")),
+                    column(6,
+                           plotOutput("LDA_plot"))
                  )
         ),
         tabPanel("SVM Classification", fluid = TRUE,
                  sidebarLayout(
                      sidebarPanel(
-                         selectInput("dim_reduc", label = h3("Dimension Reduction"), 
-                                     choices = list("None" = "none",
-                                                    "Linear Discriminant Analysis" = "lda",
-                                                    "Principal Component Analysis" = "pca"),
-                                     
-                                     selected = "lda"),
                          selectInput("svm_kernel", label = h3("SVM Kernel"), 
                                      choices = list("Linear" = "linear",
                                                     "Polynomial" = "polynomial",
@@ -113,6 +105,18 @@ ui <- fluidPage(
                                      min = 10,
                                      max = 500,
                                      value = 100),
+                     
+                     
+                     selectInput("dim_reduc", label = h3("Dimension Reduction"), 
+                                 choices = list("None" = "none",
+                                                "Linear Discriminant Analysis" = "lda",
+                                                "Principal Component Analysis" = "pca"),
+                                 
+                                 selected = "lda"),
+                     
+                     em("Note: Plot may not be accurate when choosing 'None'.
+                         In this case points are simply projected onto the the plane Z=0.5 for plotting.
+                         So SVM bounds shown are for the plane Z=0.5.")
                      ),
                      
                      mainPanel(
@@ -132,6 +136,8 @@ server <- function(input, output) {
     
     set.seed(2)
     pal <- "Dark2"
+    plot_font <- "Gadugi"
+    plot_title_size <- 20
     
     get_labs <- reactive({
         #' Generate label lists based on number of points chosen
@@ -181,6 +187,8 @@ server <- function(input, output) {
             geom_point(aes(shape = lab), size = 4, alpha = 0.6) +
             scale_color_brewer(palette =  pal) +
             scale_fill_brewer(palette = pal) +
+            theme(plot.title = element_text(hjust = 0.5, size = plot_title_size),
+                  text=element_text(family=plot_font)) +
             labs(title = "Raw Data (from random normal distributions)",
                  color = "Bender",
                  shape = "Bender")
@@ -202,6 +210,8 @@ server <- function(input, output) {
             geom_point(aes(color = lab, shape = lab), size = 4, alpha = 0.6) +
             scale_color_brewer(palette =  pal) +
             scale_fill_brewer(palette = pal) +
+            theme(plot.title = element_text(hjust = 0.5, size = plot_title_size),
+                  text=element_text(family=plot_font)) +
             labs(title = "Principal Component Analysis",
                  color = "Bender",
                  shape = "Bender")
@@ -221,6 +231,8 @@ server <- function(input, output) {
             geom_point(aes(color = lab, shape = lab), size = 4, alpha = 0.6) +
             scale_color_brewer(palette =  pal) +
             scale_fill_brewer(palette = pal) +
+            theme(plot.title = element_text(hjust = 0.5, size = plot_title_size),
+                  text=element_text(family=plot_font)) +
             labs(title = "Linear Discriminant Analysis",
                  color = "Bender",
                  shape = "Bender")
@@ -253,12 +265,9 @@ server <- function(input, output) {
             names(svm_data) <- c("lab", "X1", "X2")
         }
         else {
-            df_lda <- lda(lab ~ .,data = df_trans)
-            lda_data <- cbind(df, predict(df_lda)$x)
-            
-            svm_data <- lda_data %>% dplyr::select(lab, LD1, LD2)
+            svm_data <- df
             svm_data$lab <- factor(svm_data$lab)
-            names(svm_data) <- c("lab", "X1", "X2")
+            names(svm_data) <- c("lab", "X1", "X2", "X3")
         }
        
         
@@ -272,9 +281,19 @@ server <- function(input, output) {
             seq(min(svm_data$X2), max(svm_data$X2),length.out=input$grid_res))
         names(grid) <- names(svm_data)[2:3]
         
+        if (input$dim_reduc == "none") {
+            grid <- expand.grid(
+                seq(min(svm_data$X1), max(svm_data$X1),length.out=input$grid_res),  
+                seq(min(svm_data$X2), max(svm_data$X2),length.out=input$grid_res))
+            
+            names(grid) <- names(svm_data)[2:3]
+            
+            grid$X3 <- rep(0.5, length(grid$X1))
+        }
+        
         # Use SVM model to assign predicted class to grid points
         preds <- predict(svm_fit, grid)
-        svm_regions <- data.frame(grid, preds)
+        svm_regions <- data.frame(grid[1:2], preds)
         
         ggplot(svm_data, mapping = aes(x = X1, y = X2)) + 
             geom_tile(data = svm_regions, alpha = 0.25, aes(fill = preds)) +
@@ -282,8 +301,9 @@ server <- function(input, output) {
                        mapping = aes(color = lab, shape = lab)) +
             scale_color_brewer(palette =  pal) +
             scale_fill_brewer(palette = pal) +
-            labs(title = "Support Vector Machine on LDA",
-                 subtitle = "Radial Kernel",
+            theme(plot.title = element_text(hjust = 0.5, size = plot_title_size),
+                  text=element_text(family=plot_font)) +
+            labs(title = "Support Vector Machine",
                  fill = "SVM\nPrediction",
                  color = "Bender",
                  shape = "Bender")
