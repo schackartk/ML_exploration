@@ -25,55 +25,101 @@ preproc <- function(df) {
 # Define UI for application that draws a histogram
 ui <- fluidPage(
     
-    titlePanel("Comparing Dimension Reduction Algorithms"),
-    
-    sidebarLayout(
-        sidebarPanel(
-            sliderInput("pts_per_group",
-                        "Number of Points per Group:",
-                        min = 1,
-                        max = 200,
-                        value = 100),
-            
-            sliderInput("z_sd",
-                        "Z Standard Deviation:",
-                        min = 0,
-                        max = 0.5,
-                        value = 0.03),
-            
-            sliderInput("x_dist",
-                        "Distance Between Means in X:",
-                        min = 0,
-                        max = 1,
-                        value = 0.2),
-            
-            sliderInput("x_sd",
-                        "X Standard deviation:",
-                        min = 0,
-                        max = 1,
-                        value = 0.3),
-            
-            sliderInput("y_dist",
-                        "Distance Between Means in Y:",
-                        min = 0,
-                        max = 1,
-                        value = 0.5),
-            
-            sliderInput("y_sd",
-                        "Y Standard deviation:",
-                        min = 0,
-                        max = 1,
-                        value = 0.075),
-            
+    tabsetPanel(
+        tabPanel("Raw Data Creation", fluid = TRUE,
+                 sidebarLayout(
+                     sidebarPanel(
+                         h3("Class Size"),
+                         
+                         sliderInput("pts_per_group",
+                                     "Number of Points per Class:",
+                                     min = 1,
+                                     max = 200,
+                                     value = 100),
+                         
+                         h3("Z Distribution"),
+                         
+                         sliderInput("z_sd",
+                                     "Standard Deviation:",
+                                     min = 0,
+                                     max = 1,
+                                     value = 0.03),
+                         
+                         h3("X Distributions"),
+                         
+                         sliderInput("x_dist",
+                                     "Distance Between Means:",
+                                     min = 0,
+                                     max = 1,
+                                     value = 0.2),
+                         
+                         sliderInput("x_sd",
+                                     "Standard deviation:",
+                                     min = 0,
+                                     max = 1,
+                                     value = 0.3),
+                         
+                         h3("Y Distributions"),
+                         
+                         sliderInput("y_dist",
+                                     "Distance Between Means:",
+                                     min = 0,
+                                     max = 1,
+                                     value = 0.5),
+                         
+                         sliderInput("y_sd",
+                                     "Standard deviation:",
+                                     min = 0,
+                                     max = 1,
+                                     value = 0.075),
+                         
+                     ),
+                     
+                     mainPanel(
+                         plotOutput("raw_plot")
+                     )
+                 )
         ),
-        
-        mainPanel(
-            plotOutput("raw_plot"),
-            plotOutput("PCA_plot"),
-            plotOutput("LDA_plot"),
-            plotOutput("SVM_plot")
+        tabPanel("Dimension Reduction", fluid = TRUE,
+                 sidebarLayout(
+                     sidebarPanel(
+                         
+                     ),
+                     
+                     mainPanel(
+                         plotOutput("PCA_plot"),
+                         plotOutput("LDA_plot")
+                     )
+                 )
+        ),
+        tabPanel("SVM Classification", fluid = TRUE,
+                 sidebarLayout(
+                     sidebarPanel(
+                         
+                         selectInput("svm_kernel", label = h3("SVM Kernel"), 
+                                     choices = list("Linear" = "linear",
+                                                    "Polynomial" = "polynomial",
+                                                    "Radial basis" = "radial",
+                                                    "Sigmoid" = "sigmoid"),
+                                                    
+                                     selected = "linear"),
+                         sliderInput("grid_res",
+                                     label = h5("SVM Boundary Resolution (used for plotting):"),
+                                     min = 10,
+                                     max = 500,
+                                     value = 100),
+                     ),
+                     
+                     mainPanel(
+                         plotOutput("SVM_plot")
+                     )
+                 )
         )
     )
+    
+    
+    
+    
 )
 
 # Define server logic required to draw a histogram
@@ -189,14 +235,14 @@ server <- function(input, output) {
         svm_data$lab <- factor(svm_data$lab)
         
         svm_fit <-  svm_data %>% svm(factor(lab) ~ ., data = .,
-                                     kernel = "radial", cost = 10,
+                                     kernel = input$svm_kernel,
                                      scale = FALSE)
         
         # A grid the same size as the data, that will be turned into the SVM regions
         grid <- expand.grid(
-            seq(min(svm_data$LD1), max(svm_data$LD1),length.out=200),  
-            seq(min(svm_data$LD2), max(svm_data$LD2),length.out=200))
-        names(grid) <- names(svm.data)[2:3]
+            seq(min(svm_data$LD1), max(svm_data$LD1),length.out=input$grid_res),  
+            seq(min(svm_data$LD2), max(svm_data$LD2),length.out=input$grid_res))
+        names(grid) <- names(svm_data)[2:3]
         
         # Use SVM model to assign predicted class to grid points
         preds <- predict(svm_fit, grid)
