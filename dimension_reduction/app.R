@@ -41,7 +41,7 @@ ui <- fluidPage(tabsetPanel(
                     value = 100
                 ),
                 
-                h3("z Distribution"),
+                h3("Z Distribution"),
                 
                 sliderInput(
                     "z_sd",
@@ -69,7 +69,7 @@ ui <- fluidPage(tabsetPanel(
                     value = 0.3
                 ),
                 
-                h3("y Distributions"),
+                h3("Y Distributions"),
                 
                 sliderInput(
                     "y_dist",
@@ -104,6 +104,24 @@ ui <- fluidPage(tabsetPanel(
         fluid = TRUE,
         sidebarLayout(
             sidebarPanel(
+                selectInput(
+                    "dim_reduc",
+                    label = h3("Dimension Reduction"),
+                    choices = list(
+                        "None" = "none",
+                        "Linear Discriminant Analysis" = "lda",
+                        "Principal Component Analysis" = "pca"
+                    ),
+                    
+                    selected = "lda"
+                ),
+                
+                em(
+                    "Note: Plot may not be accurate when choosing 'None'.
+                         In this case points are simply projected onto the the plane Z=0.5 for plotting.
+                         So SVM bounds shown are for the plane Z=0.5."
+                ),
+                
                 h3("Support Vector Machine"),
                 
                 selectInput(
@@ -125,25 +143,6 @@ ui <- fluidPage(tabsetPanel(
                     min = 10,
                     max = 500,
                     value = 100
-                ),
-                
-                
-                selectInput(
-                    "dim_reduc",
-                    label = h3("Dimension Reduction"),
-                    choices = list(
-                        "None" = "none",
-                        "Linear Discriminant Analysis" = "lda",
-                        "Principal Component Analysis" = "pca"
-                    ),
-                    
-                    selected = "lda"
-                ),
-                
-                em(
-                    "Note: Plot may not be accurate when choosing 'None'.
-                         In this case points are simply projected onto the the plane Z=0.5 for plotting.
-                         So SVM bounds shown are for the plane Z=0.5."
                 )
             ),
             
@@ -189,18 +188,18 @@ server <- function(input, output) {
               rnorm(n = n_per_grp, mean = 0.5, sd = input$x_sd),
               rnorm(n = n_per_grp,mean = 0.5 + input$x_dist, sd = input$x_sd))
         
-        y <-
+        Y <-
             c(rnorm(n = n_per_grp, mean = 0.5 - input$y_dist, sd = input$y_sd),
               rnorm(n = n_per_grp, mean = 0.5, sd = input$y_sd),
               rnorm(n = n_per_grp, mean = 0.5 + input$y_dist, sd = input$y_sd))
         
-        z <- c(rnorm(n = 3 * n_per_grp, mean = 0.5, sd = input$z_sd))
+        Z <- c(rnorm(n = 3 * n_per_grp, mean = 0.5, sd = input$z_sd))
         
         df <- df %>%
             add_column(lab) %>%
             add_column(X) %>%
-            add_column(y) %>%
-            add_column(z)
+            add_column(Y) %>%
+            add_column(Z)
         
         df
     })
@@ -211,7 +210,7 @@ server <- function(input, output) {
         df <- make_df()
         
         raw_plot <-
-            ggplot(df, mapping = aes(x = X, y = y, color = lab
+            ggplot(df, mapping = aes(x = X, y = Y, color = lab
             )) +
             geom_point(aes(shape = lab), alpha = 0.6, size = 4) +
             scale_color_manual(values =  pal) +
@@ -306,7 +305,7 @@ server <- function(input, output) {
             svm_data$lab <- factor(svm_data$lab)
             names(svm_data) <- c("lab", "X1", "X2", "X3")
             x_label <- "X"
-            y_label <- "y"
+            y_label <- "Y"
         }
         
         
