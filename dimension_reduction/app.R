@@ -95,7 +95,12 @@ ui <- fluidPage(
         tabPanel("SVM Classification", fluid = TRUE,
                  sidebarLayout(
                      sidebarPanel(
-                         
+                         selectInput("dim_reduc", label = h3("Dimension Reduction"), 
+                                     choices = list("None" = "none",
+                                                    "Linear Discriminant Analysis" = "lda",
+                                                    "Principal Component Analysis" = "pca"),
+                                     
+                                     selected = "lda"),
                          selectInput("svm_kernel", label = h3("SVM Kernel"), 
                                      choices = list("Linear" = "linear",
                                                     "Polynomial" = "polynomial",
@@ -228,11 +233,34 @@ server <- function(input, output) {
         
         df_trans <- preproc(df)
         
-        df_lda <- lda(lab ~ .,data = df_trans)
-        lda_data <- cbind(df, predict(df_lda)$x)
+
         
-        svm_data <- lda_data %>% dplyr::select(lab, LD1, LD2)
-        svm_data$lab <- factor(svm_data$lab)
+        if(input$dim_reduc == "lda"){
+            df_lda <- lda(lab ~ .,data = df_trans)
+            lda_data <- cbind(df, predict(df_lda)$x)
+            
+            svm_data <- lda_data %>% dplyr::select(lab, LD1, LD2)
+            svm_data$lab <- factor(svm_data$lab)
+            names(svm_data) <- c("lab", "X1", "X2")
+        }
+        else if (input$dim_reduc == "pca"){
+            df_pca <- prcomp(df_trans[,2:4])
+            df_pca <- as.data.frame.matrix(df_pca$x)
+            df_pca$lab <- get_labs()
+            
+            svm_data <- df_pca %>% dplyr::select(lab, PC1, PC2)
+            svm_data$lab <- factor(svm_data$lab)
+            names(svm_data) <- c("lab", "X1", "X2")
+        }
+        else {
+            df_lda <- lda(lab ~ .,data = df_trans)
+            lda_data <- cbind(df, predict(df_lda)$x)
+            
+            svm_data <- lda_data %>% dplyr::select(lab, LD1, LD2)
+            svm_data$lab <- factor(svm_data$lab)
+            names(svm_data) <- c("lab", "X1", "X2")
+        }
+       
         
         svm_fit <-  svm_data %>% svm(factor(lab) ~ ., data = .,
                                      kernel = input$svm_kernel,
@@ -240,15 +268,15 @@ server <- function(input, output) {
         
         # A grid the same size as the data, that will be turned into the SVM regions
         grid <- expand.grid(
-            seq(min(svm_data$LD1), max(svm_data$LD1),length.out=input$grid_res),  
-            seq(min(svm_data$LD2), max(svm_data$LD2),length.out=input$grid_res))
+            seq(min(svm_data$X1), max(svm_data$X1),length.out=input$grid_res),  
+            seq(min(svm_data$X2), max(svm_data$X2),length.out=input$grid_res))
         names(grid) <- names(svm_data)[2:3]
         
         # Use SVM model to assign predicted class to grid points
         preds <- predict(svm_fit, grid)
         svm_regions <- data.frame(grid, preds)
         
-        ggplot(svm_data, mapping = aes(x = LD1, y = LD2)) + 
+        ggplot(svm_data, mapping = aes(x = X1, y = X2)) + 
             geom_tile(data = svm_regions, alpha = 0.25, aes(fill = preds)) +
             geom_point(size = 4, alpha = 0.6,
                        mapping = aes(color = lab, shape = lab)) +
